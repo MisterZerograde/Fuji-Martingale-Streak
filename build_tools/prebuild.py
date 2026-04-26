@@ -2,8 +2,9 @@ import base64
 import os
 
 # Paths relative to this script
-UI_PATH = os.path.join('..', 'app', 'ui', 'index.html')
-OUTPUT_PATH = os.path.join('..', 'app', 'src', 'main.py')
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+UI_PATH = os.path.join(BASE_DIR, 'app', 'ui', 'index.html')
+OUTPUT_PATH = os.path.join(BASE_DIR, 'app', 'src', 'main.py')
 
 # 1. Read the HTML
 with open(UI_PATH, 'rb') as f:
