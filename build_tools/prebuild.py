@@ -1,8 +1,12 @@
 import base64
 import os
 
+# Paths relative to this script
+UI_PATH = os.path.join('..', 'app', 'ui', 'index.html')
+OUTPUT_PATH = os.path.join('..', 'app', 'src', 'main.py')
+
 # 1. Read the HTML
-with open('index.html', 'rb') as f:
+with open(UI_PATH, 'rb') as f:
     html_bytes = f.read()
 
 # 2. Encode to Base64
@@ -49,7 +53,8 @@ if __name__ == "__main__":
     sys.exit(app.exec())
 '''
 
-with open('fuji_app.py', 'w', encoding='utf-8') as f:
+with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
     f.write(script_content)
 
-print("fuji_app.py generated successfully.")
+print(f"Application logic updated successfully at {OUTPUT_PATH}")
+

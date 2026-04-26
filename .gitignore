@@ -1,22 +1,24 @@
 # Build artifacts
 build/
 dist/
-*.spec
+build_tools/*.spec
 __pycache__/
 
-# Source files (Explicitly allowed)
-!src/index.html
+# Data and Artifacts (Private)
+data/reports/*.html
+data/reports/*.htm
+artifacts/
+scratch/
 
-# Large data files
-*.html
-*.htm
+# Application Source
+!app/ui/index.html
+
+# Generic ignores
 *.csv
-!src/index.html
-
-# Python environment
 venv/
 .env
 
 # OS files
 .DS_Store
 Thumbs.db
+
