@@ -21,7 +21,17 @@ if exist build rd /s /q build
 if exist FujiStreak.spec del /f /q FujiStreak.spec
 
 echo 3. Compiling into a single EXE...
-pyinstaller --onefile --noconsole --name "FujiStreak" app/src/main.py
+python -m PyInstaller --onefile --noconsole --name "FujiStreak" ^
+    --exclude-module PySide6 ^
+    --exclude-module PySide6.QtWebEngineCore ^
+    --exclude-module PySide6.QtWebEngineWidgets ^
+    --exclude-module PySide6.QtWidgets ^
+    --exclude-module PySide6.QtGui ^
+    --exclude-module PySide6.QtCore ^
+    --exclude-module numpy ^
+    --exclude-module pandas ^
+    --exclude-module matplotlib ^
+    app/src/main.py
 
 echo 4. Cleaning up build artifacts...
 if exist build rd /s /q build
