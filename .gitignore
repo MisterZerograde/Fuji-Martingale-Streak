@@ -4,10 +4,14 @@ dist/
 *.spec
 __pycache__/
 
+# Source files (Explicitly allowed)
+!src/index.html
+
 # Large data files
 *.html
 *.htm
 *.csv
+!src/index.html
 
 # Python environment
 venv/

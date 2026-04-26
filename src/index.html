@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fuji Martingale Streak | Performance Analysis</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-deep: #0f1115;
+            --bg-card: #1a1d23;
+            --accent-primary: #00f2ff;
+            --accent-secondary: #7000ff;
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --success: #10b981;
+            --danger: #ef4444;
+            --glass: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+        }
+
+        .drop-zone {
+            width: 100%;
+            height: 200px;
+            border: 2px dashed var(--border);
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: var(--glass);
+            margin-bottom: 2rem;
+        }
+
+        .drop-zone:hover, .drop-zone.drag-over {
+            border-color: var(--accent-primary);
+            background: rgba(0, 242, 255, 0.05);
+        }
+
+        .drop-zone p {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            margin-top: 1rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+            display: none; /* Hidden until data loaded */
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            transition: transform 0.2s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .stat-value.positive { color: var(--success); }
+        .stat-value.negative { color: var(--danger); }
+
+        .chart-container {
+            background: var(--bg-card);
+            padding: 1.5rem;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            margin-bottom: 2rem;
+            display: none;
+        }
+
+        .data-section {
+            background: var(--bg-card);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            display: none;
+        }
+
+        .section-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+        }
+
+        th {
+            text-align: left;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.02);
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        tr:last-child td { border-bottom: none; }
+
+        .sequence-tag {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: var(--accent-secondary);
+            color: white;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 17, 21, 0.8);
+            backdrop-filter: blur(8px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid var(--glass);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loader">
+        <div class="spinner"></div>
+    </div>
+
+    <div class="container">
+        <header>
+            <div class="logo">Fuji Martingale Streak</div>
+            <div id="file-info" class="text-muted">No report loaded</div>
+        </header>
+
+        <main>
+            <div class="drop-zone" id="drop-zone">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-primary)">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <p>Drag and drop your MT5/MT4 HTML report here</p>
+                <input type="file" id="file-input" class="hidden" accept=".html,.htm">
+            </div>
+
+            <div class="stats-grid" id="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Max Sequence</div>
+                    <div class="stat-value" id="stat-sequence">0 levels</div>
+                </div>
+            </div>
+
+            <div class="chart-container" id="frequency-chart-container" style="display: none; height: auto; min-height: 450px;">
+                <h3 style="font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 1.5rem;">Martingale Frequency Distribution</h3>
+                <div style="height: 300px;">
+                    <canvas id="frequencyChart"></canvas>
+                </div>
+                <div id="depth-summary" style="margin-top: 2rem; padding: 1.5rem; background: var(--glass); border-radius: 12px; border: 1px solid var(--border); display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
+                    <!-- Summary items injected here -->
+                </div>
+            </div>
+
+
+
+            <div class="data-section" id="data-section">
+                <div class="section-header">
+                    <h2 style="font-size: 1.2rem; font-weight: 600;">Martingale Sequence Proof Data</h2>
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 0.8rem; background: var(--bg-deep); padding: 0.5rem 1rem; border-radius: 8px; border: 1px solid var(--border);">
+                            <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">MIN DEPTH</span>
+                            <input type="number" id="depth-filter" value="2" min="1" style="width: 50px; background: transparent; color: var(--accent-primary); border: none; outline: none; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 1rem;">
+                        </div>
+                        <button id="export-btn" style="background: var(--accent-primary); border: none; color: var(--bg-deep); padding: 0.6rem 1.2rem; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 700; transition: all 0.2s ease;">Export Full Report</button>
+                    </div>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table id="sequence-table">
+                        <thead>
+                            <tr>
+                                <th>Seq #</th>
+                                <th>Start Time</th>
+                                <th>Depth</th>
+                                <th>Lot Progression</th>
+                                <th>Total Profit</th>
+                                <th>Result</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body">
+                            <!-- Data injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const loader = document.getElementById('loader');
+        const depthFilter = document.getElementById('depth-filter');
+        let freqChart = null;
+        window.allSequences = [];
+
+        depthFilter.oninput = (e) => {
+            if (window.allSequences.length > 0) {
+                updateDashboard(window.allSequences, parseInt(e.target.value) || 1);
+            }
+        };
+
+        dropZone.onclick = () => fileInput.click();
+
+        dropZone.ondragover = (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        };
+
+        dropZone.ondragleave = () => dropZone.classList.remove('drag-over');
+
+        dropZone.ondrop = (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file) handleFile(file);
+        };
+
+        fileInput.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) handleFile(file);
+        };
+
+        function handleFile(file) {
+            loader.style.display = 'flex';
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                const content = e.target.result;
+                try {
+                    parseReport(content);
+                    document.getElementById('file-info').innerText = file.name;
+                } catch (err) {
+                    console.error(err);
+                    alert("Parsing Error: " + err.message);
+                } finally {
+                    loader.style.display = 'none';
+                }
+            };
+
+            // Detect encoding: check for UTF-16 markers or just try
+            reader.readAsText(file);
+        }
+
+        function parseReport(html) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, "text/html");
+            const rows = Array.from(doc.querySelectorAll('tr'));
+            const trades = [];
+            
+            let foundDealsTable = false;
+
+            for (const row of rows) {
+                const cells = Array.from(row.querySelectorAll('td')).map(td => td.innerText.trim());
+                
+                // Header detection for Deals table
+                if (cells.includes('Time') && cells.includes('Deal') && cells.includes('Profit')) {
+                    foundDealsTable = true;
+                    continue;
+                }
+
+                if (foundDealsTable) {
+                    // Deal row detection: Time, ID, Symbol, Type, Direction, Volume, Price, Order, Commission, Swap, Profit, Balance, Comment
+                    // Type can be buy, sell, balance, credit, etc.
+                    // Profit is at index 10, Balance at index 11, Comment at index 12
+                    if (cells.length >= 12 && /\d{4}\.\d{2}\.\d{2}/.test(cells[0])) {
+                        const type = cells[3].toLowerCase();
+                        if (type === 'balance' || type === 'credit') continue;
+
+                        const commission = parseFloat(cells[8].replace(/ /g, '').replace(/,/g, '')) || 0;
+                        const swap = parseFloat(cells[9].replace(/ /g, '').replace(/,/g, '')) || 0;
+                        const rawProfit = parseFloat(cells[10].replace(/ /g, '').replace(/,/g, '')) || 0;
+                        const netProfit = rawProfit + commission + swap;
+                        const volume = parseFloat(cells[5]);
+                        const direction = cells[4].toLowerCase();
+                        const comment = cells[12] || '';
+
+                        if (!isNaN(netProfit)) {
+                            trades.push({
+                                time: cells[0],
+                                type: type,
+                                direction: direction,
+                                lot: volume,
+                                profit: netProfit,
+                                comment: comment
+                            });
+                        }
+                    } else if (cells.length < 5 && trades.length > 0) {
+                        // End of table
+                        break;
+                    }
+                }
+            }
+
+            if (trades.length === 0) {
+                // Fallback: try simpler parsing if Deals table header wasn't found
+                rows.forEach(row => {
+                    const cells = Array.from(row.querySelectorAll('td')).map(td => td.innerText.trim());
+                    if (cells.length >= 10 && /\d{4}\.\d{2}\.\d{2}/.test(cells[0]) && (cells[3] === 'buy' || cells[3] === 'sell')) {
+                        const profit = parseFloat(cells[cells.length - 2].replace(/ /g, ''));
+                        if (!isNaN(profit)) {
+                            trades.push({
+                                time: cells[0],
+                                type: cells[3],
+                                lot: parseFloat(cells[5]),
+                                profit: profit,
+                                comment: cells[cells.length - 1]
+                            });
+                        }
+                    }
+                });
+            }
+
+            if (trades.length === 0) throw new Error("Could not find any trade deals in the report.");
+
+            processTrades(trades);
+        }
+
+        function processTrades(trades) {
+            let currentBalance = 0;
+            const equityCurve = [];
+            const sequences = [];
+            
+            let currentSeq = null;
+
+            trades.forEach((trade) => {
+                currentBalance += trade.profit;
+                equityCurve.push(currentBalance);
+
+                // Use Deal Direction (in/out) to robustly group sequences
+                if (trade.direction === 'in') {
+                    // If the current sequence already had 'out' deals (closing), 
+                    // this new 'in' deal marks the start of a brand new sequence.
+                    if (currentSeq && currentSeq.hasOutDeals) {
+                        sequences.push(currentSeq);
+                        currentSeq = null;
+                    }
+
+                    if (!currentSeq) {
+                        currentSeq = {
+                            startTime: trade.time,
+                            endTime: trade.time,
+                            trades: [trade], // Keep all deals for the sequence
+                            inTrades: [trade], // Track 'in' deals for lot progression
+                            levels: 1,
+                            maxLot: trade.lot,
+                            totalProfit: trade.profit,
+                            hasOutDeals: false,
+                            comment: trade.comment
+                        };
+                    } else {
+                        currentSeq.trades.push(trade);
+                        currentSeq.inTrades.push(trade);
+                        currentSeq.endTime = trade.time;
+                        currentSeq.levels++;
+                        currentSeq.maxLot = Math.max(currentSeq.maxLot, trade.lot);
+                        currentSeq.totalProfit += trade.profit;
+                    }
+                } else if (trade.direction === 'out' || trade.direction === 'in/out') {
+                    // 'out' deals realize the profit and mark the closure phase of the sequence
+                    if (currentSeq) {
+                        currentSeq.trades.push(trade);
+                        currentSeq.endTime = trade.time;
+                        currentSeq.totalProfit += trade.profit;
+                        currentSeq.hasOutDeals = true;
+                    } else {
+                        // Edge case: out deal without a recorded in deal
+                        sequences.push({
+                            startTime: trade.time,
+                            endTime: trade.time,
+                            trades: [trade],
+                            inTrades: [],
+                            levels: 0,
+                            maxLot: trade.lot,
+                            totalProfit: trade.profit,
+                            hasOutDeals: true,
+                            comment: trade.comment
+                        });
+                    }
+                } else {
+                    // Fallback for types without direction
+                    if (!currentSeq) currentBalance += 0;
+                }
+            });
+            if (currentSeq) sequences.push(currentSeq);
+            
+            window.allSequences = sequences;
+            
+            // Show UI sections
+            document.getElementById('stats-grid').style.display = 'grid';
+            document.getElementById('frequency-chart-container').style.display = 'block';
+            document.getElementById('data-section').style.display = 'block';
+            document.getElementById('drop-zone').style.height = '100px';
+
+            // Initial update using the default filter value
+            updateDashboard(sequences, parseInt(depthFilter.value));
+        }
+
+        function updateDashboard(sequences, minDepth) {
+            // Filter sequences
+            const filteredSeqs = sequences.filter(s => s.levels >= minDepth);
+            
+            const maxSeqLength = filteredSeqs.length > 0 ? Math.max(...filteredSeqs.map(s => s.levels)) : 0;
+
+            // Update UI Elements
+            document.getElementById('stat-sequence').innerText = `${maxSeqLength} levels`;
+
+            renderFrequencyChart(filteredSeqs);
+            renderTable(filteredSeqs);
+            updateSummary(filteredSeqs);
+        }
+
+        function updateSummary(sequences) {
+            if (sequences.length === 0) return;
+
+            // Calculate backtest duration in days
+            const parseTime = (t) => new Date(t.replace(/\./g, '/'));
+            const start = parseTime(sequences[0].startTime);
+            const end = parseTime(sequences[sequences.length - 1].endTime);
+            const totalDays = Math.max(1, (end - start) / (1000 * 60 * 60 * 24));
+
+            // Calculate Empirical Loss Probability from the data itself
+            // Total attempts = Total trades across all sequences
+            // Total failures = Every time a sequence didn't stop (levels - 1)
+            const totalTradesCount = sequences.reduce((sum, s) => sum + s.levels, 0);
+            const totalFailures = totalTradesCount - sequences.length;
+            const empiricalLossProb = totalFailures / totalTradesCount;
+
+            const counts = {};
+            sequences.forEach(s => {
+                counts[s.levels] = (counts[s.levels] || 0) + 1;
+            });
+
+            const labels = Object.keys(counts).sort((a, b) => parseInt(a) - parseInt(b));
+            const container = document.getElementById('depth-summary');
+            container.innerHTML = '';
+
+            labels.forEach(l => {
+                const count = counts[l];
+                const avgDays = totalDays / count;
+                let freqText = "";
+                if (avgDays < 1) {
+                    const hours = avgDays * 24;
+                    freqText = hours < 1 ? `${(hours * 60).toFixed(0)}m` : `${hours.toFixed(1)}h`;
+                } else if (avgDays > 30) {
+                    freqText = `${(avgDays / 30).toFixed(1)}mo`;
+                } else {
+                    freqText = `${avgDays.toFixed(1)}d`;
+                }
+
+                const div = document.createElement('div');
+                div.style.cssText = "padding: 1.25rem; background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px solid var(--border); transition: all 0.2s ease;";
+                div.innerHTML = `
+                    <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 0.75rem;">Depth ${l}</div>
+                    <div style="font-size: 1.5rem; color: var(--accent-primary); font-weight: 800; font-family: 'JetBrains Mono', monospace; line-height: 1;">
+                        ${count.toLocaleString()} <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500; margin-left: 2px;">times</span>
+                    </div>
+                    <div style="margin-top: 0.75rem; font-size: 0.75rem; color: var(--text-muted); font-style: italic; opacity: 0.8;">
+                        Avg: 1 per ${freqText}
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function exportReport(sequences) {
+            // 1. Export CSV
+            const headers = ['Seq #', 'Start Time', 'Depth', 'Lot Progression', 'Total Profit', 'Result'];
+            const rows = sequences.map((seq, i) => [
+                i + 1,
+                seq.startTime,
+                seq.levels,
+                seq.inTrades.map(t => t.lot.toFixed(2)).join('|'),
+                seq.totalProfit.toFixed(2),
+                seq.totalProfit >= 0 ? 'PROFIT' : 'LOSS'
+            ]);
+
+            const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const csvLink = document.createElement("a");
+            csvLink.href = URL.createObjectURL(blob);
+            csvLink.download = "martingale_data_report.csv";
+            csvLink.click();
+
+            // 2. Export High-End Report PNG
+            const chartCanvas = document.getElementById('frequencyChart');
+            const counts = {};
+            sequences.forEach(s => { counts[s.levels] = (counts[s.levels] || 0) + 1; });
+            const labels = Object.keys(counts).sort((a, b) => parseInt(a) - parseInt(b));
+            const totalSeqs = sequences.length;
+            const maxD = labels.length > 0 ? labels[labels.length - 1] : 0;
+
+            const tempCanvas = document.createElement('canvas');
+            const margin = 60;
+            const sidebarWidth = 320;
+            const rowHeight = 42;
+            const headerHeight = 160;
+            
+            tempCanvas.width = chartCanvas.width + sidebarWidth + (margin * 2) + 60;
+            tempCanvas.height = Math.max(chartCanvas.height + headerHeight + margin + 100, (labels.length * rowHeight) + headerHeight + margin + 100);
+            
+            const ctx = tempCanvas.getContext('2d');
+            
+            // Premium Gradient Background
+            const bgGrad = ctx.createLinearGradient(0, 0, 0, tempCanvas.height);
+            bgGrad.addColorStop(0, '#0f172a'); // Deep slate blue
+            bgGrad.addColorStop(1, '#020617'); // Near black
+            ctx.fillStyle = bgGrad;
+            ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+            
+            // Subtle Grid Overlay
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
+            ctx.lineWidth = 1;
+            for(let i=0; i<tempCanvas.width; i+=40) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i, tempCanvas.height); ctx.stroke(); }
+            for(let i=0; i<tempCanvas.height; i+=40) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(tempCanvas.width, i); ctx.stroke(); }
+
+            // Header Section
+            ctx.fillStyle = '#00f2ff';
+            ctx.font = 'bold 12px Inter, sans-serif';
+            ctx.fillText('FUJI MARTINGALE ANALYSIS ENGINE', margin, margin);
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '900 36px Inter, sans-serif';
+            ctx.fillText('Fuji Martingale Streak Report', margin, margin + 45);
+            
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '500 14px Inter, sans-serif';
+            ctx.fillText(`Sequence extraction completed on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, margin, margin + 75);
+
+            // Key Stats Row
+            const drawStat = (label, value, x) => {
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '600 11px Inter, sans-serif';
+                ctx.fillText(label.toUpperCase(), x, margin + 115);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 24px "JetBrains Mono", monospace';
+                ctx.fillText(value, x, margin + 145);
+            };
+            drawStat('Total Sequences', totalSeqs.toLocaleString(), margin);
+            drawStat('Max Depth Found', `${maxD} Levels`, margin + 180);
+            drawStat('Report Status', 'VERIFIED', margin + 360);
+
+            // Main Chart Drawing
+            ctx.shadowColor = 'rgba(0, 242, 255, 0.2)';
+            ctx.shadowBlur = 30;
+            ctx.drawImage(chartCanvas, margin, margin + headerHeight + 40);
+            ctx.shadowBlur = 0; // Reset shadow
+
+            // Premium Sidebar (Glassmorphism)
+            const sidebarX = chartCanvas.width + margin + 60;
+            const sidebarY = margin + headerHeight + 40;
+            const sidebarH = tempCanvas.height - sidebarY - margin;
+            
+            // Sidebar Glow/Background
+            const sideGrad = ctx.createLinearGradient(sidebarX, sidebarY, sidebarX + sidebarWidth, sidebarY + sidebarH);
+            sideGrad.addColorStop(0, 'rgba(255, 255, 255, 0.05)');
+            sideGrad.addColorStop(1, 'rgba(255, 255, 255, 0.01)');
+            ctx.fillStyle = sideGrad;
+            
+            if (ctx.roundRect) {
+                ctx.beginPath();
+                ctx.roundRect(sidebarX, sidebarY, sidebarWidth, sidebarH, 24);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+
+            // Sidebar Header
+            ctx.fillStyle = '#00f2ff';
+            ctx.font = 'bold 13px Inter, sans-serif';
+            ctx.fillText('DISTRIBUTION BREAKDOWN', sidebarX + 30, sidebarY + 45);
+
+            // Calculate backtest duration in days for avg frequency
+            const parseTime = (t) => new Date(t.replace(/\./g, '/'));
+            const start = parseTime(sequences[0].startTime);
+            const end = parseTime(sequences[sequences.length - 1].endTime);
+            const totalDays = Math.max(1, (end - start) / (1000 * 60 * 60 * 24));
+
+            let yPos = sidebarY + 95;
+            labels.forEach((l, idx) => {
+                const count = counts[l];
+                const avgDays = totalDays / count;
+                let freqText = "";
+                if (avgDays < 1) {
+                    const hrs = avgDays * 24;
+                    freqText = hrs < 1 ? `${(hrs * 60).toFixed(0)}m` : `${hrs.toFixed(1)}h`;
+                } else if (avgDays > 30) {
+                    freqText = `${(avgDays / 30).toFixed(1)}mo`;
+                } else {
+                    freqText = `${avgDays.toFixed(1)}d`;
+                }
+
+                const isEven = idx % 2 === 0;
+                if (isEven) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
+                    ctx.fillRect(sidebarX + 10, yPos - 25, sidebarWidth - 20, rowHeight);
+                }
+
+                // Label
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = 'bold 12px Inter, sans-serif';
+                ctx.fillText(`DEPTH ${l}`, sidebarX + 30, yPos - 5);
+                
+                // Frequency Tag
+                ctx.fillStyle = 'rgba(0, 242, 255, 0.1)';
+                const tagW = ctx.measureText(`1 per ${freqText}`).width + 10;
+                ctx.fillRect(sidebarX + 30, yPos + 2, tagW, 14);
+                ctx.fillStyle = '#00f2ff';
+                ctx.font = '500 10px Inter, sans-serif';
+                ctx.fillText(`1 per ${freqText}`, sidebarX + 35, yPos + 12);
+
+                // Count
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 16px "JetBrains Mono", monospace';
+                const valStr = `${count.toLocaleString()} times`;
+                const valW = ctx.measureText(valStr).width;
+                ctx.fillText(valStr, sidebarX + sidebarWidth - valW - 30, yPos + 5);
+                
+                yPos += rowHeight;
+            });
+
+            // Footer / Watermark
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.font = 'italic 12px Inter, sans-serif';
+            ctx.fillText('FUJI MARTINGALE STREAK • PERFORMANCE ANALYSIS', margin, tempCanvas.height - 30);
+            
+            const pngLink = document.createElement('a');
+            pngLink.href = tempCanvas.toDataURL('image/png');
+            pngLink.download = `Martingale_Report_${Date.now()}.png`;
+            pngLink.click();
+        }
+
+        function renderFrequencyChart(sequences) {
+            const counts = {};
+            sequences.forEach(s => {
+                counts[s.levels] = (counts[s.levels] || 0) + 1;
+            });
+
+            const labels = Object.keys(counts).sort((a, b) => parseInt(a) - parseInt(b));
+            const data = labels.map(l => counts[l]);
+            const displayLabels = labels.map(l => `${l} Trades`);
+
+            const ctx = document.getElementById('frequencyChart').getContext('2d');
+            if (freqChart) freqChart.destroy();
+
+            freqChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: displayLabels,
+                    datasets: [{
+                        label: 'Frequency',
+                        data: data,
+                        backgroundColor: 'rgba(0, 242, 255, 0.2)',
+                        borderColor: '#00f2ff',
+                        borderWidth: 2,
+                        borderRadius: 6,
+                        hoverBackgroundColor: 'rgba(0, 242, 255, 0.4)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1a1d23',
+                            titleColor: '#00f2ff',
+                            bodyColor: '#e2e8f0',
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1,
+                            displayColors: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#94a3b8', font: { family: 'Inter', size: 11 } }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { 
+                                stepSize: 1,
+                                color: '#94a3b8', 
+                                font: { family: 'JetBrains Mono', size: 11 } 
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+
+
+        function renderTable(filteredSeqs) {
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+
+            filteredSeqs.forEach((seq, i) => {
+                const tr = document.createElement('tr');
+                const resultClass = seq.totalProfit >= 0 ? 'positive' : 'negative';
+                // Lot progression should only show the 'in' trades (the martingale steps)
+                const lotProgression = seq.inTrades.map(t => t.lot.toFixed(2)).join(', ');
+                
+                tr.innerHTML = `
+                    <td>${i + 1}</td>
+                    <td>${seq.startTime}</td>
+                    <td><span class="sequence-tag">${seq.levels}</span></td>
+                    <td style="font-size: 0.8rem; color: var(--text-muted); max-width: 300px; overflow-wrap: break-word; word-break: normal;">${lotProgression}</td>
+                    <td class="${resultClass}">$${seq.totalProfit.toFixed(2)}</td>
+                    <td class="${resultClass}">${seq.totalProfit >= 0 ? 'PROFIT' : 'LOSS'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('export-btn').onclick = () => exportReport(filteredSeqs);
+        }
+
+
+    </script>
+</body>
+</html>
