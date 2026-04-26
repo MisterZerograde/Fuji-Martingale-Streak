@@ -1,0 +1,18 @@
+# Build artifacts
+build/
+dist/
+*.spec
+__pycache__/
+
+# Large data files
+*.html
+*.htm
+*.csv
+
+# Python environment
+venv/
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
