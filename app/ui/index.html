@@ -253,7 +253,6 @@
                             <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">MIN DEPTH</span>
                             <input type="number" id="depth-filter" value="2" min="1" style="width: 50px; background: transparent; color: var(--accent-primary); border: none; outline: none; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 1rem;">
                         </div>
-                        <button id="export-btn" style="background: var(--accent-primary); border: none; color: var(--bg-deep); padding: 0.6rem 1.2rem; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 700; transition: all 0.2s ease;">Export Full Report</button>
                     </div>
                 </div>
                 <div style="overflow-x: auto;">
@@ -554,173 +553,6 @@
             });
         }
 
-        function exportReport(sequences) {
-            // 1. Export CSV
-            const headers = ['Seq #', 'Start Time', 'Depth', 'Lot Progression', 'Total Profit', 'Result'];
-            const rows = sequences.map((seq, i) => [
-                i + 1,
-                seq.startTime,
-                seq.levels,
-                seq.inTrades.map(t => t.lot.toFixed(2)).join('|'),
-                seq.totalProfit.toFixed(2),
-                seq.totalProfit >= 0 ? 'PROFIT' : 'LOSS'
-            ]);
-
-            const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const csvLink = document.createElement("a");
-            csvLink.href = URL.createObjectURL(blob);
-            csvLink.download = "martingale_data_report.csv";
-            csvLink.click();
-
-            // 2. Export High-End Report PNG
-            const chartCanvas = document.getElementById('frequencyChart');
-            const counts = {};
-            sequences.forEach(s => { counts[s.levels] = (counts[s.levels] || 0) + 1; });
-            const labels = Object.keys(counts).sort((a, b) => parseInt(a) - parseInt(b));
-            const totalSeqs = sequences.length;
-            const maxD = labels.length > 0 ? labels[labels.length - 1] : 0;
-
-            const tempCanvas = document.createElement('canvas');
-            const margin = 60;
-            const sidebarWidth = 320;
-            const rowHeight = 42;
-            const headerHeight = 160;
-            
-            tempCanvas.width = chartCanvas.width + sidebarWidth + (margin * 2) + 60;
-            tempCanvas.height = Math.max(chartCanvas.height + headerHeight + margin + 100, (labels.length * rowHeight) + headerHeight + margin + 100);
-            
-            const ctx = tempCanvas.getContext('2d');
-            
-            // Premium Gradient Background
-            const bgGrad = ctx.createLinearGradient(0, 0, 0, tempCanvas.height);
-            bgGrad.addColorStop(0, '#0f172a'); // Deep slate blue
-            bgGrad.addColorStop(1, '#020617'); // Near black
-            ctx.fillStyle = bgGrad;
-            ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-            
-            // Subtle Grid Overlay
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
-            ctx.lineWidth = 1;
-            for(let i=0; i<tempCanvas.width; i+=40) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i, tempCanvas.height); ctx.stroke(); }
-            for(let i=0; i<tempCanvas.height; i+=40) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(tempCanvas.width, i); ctx.stroke(); }
-
-            // Header Section
-            ctx.fillStyle = '#00f2ff';
-            ctx.font = 'bold 12px Inter, sans-serif';
-            ctx.fillText('FUJI MARTINGALE ANALYSIS ENGINE', margin, margin);
-            
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '900 36px Inter, sans-serif';
-            ctx.fillText('Fuji Martingale Streak Report', margin, margin + 45);
-            
-            ctx.fillStyle = '#94a3b8';
-            ctx.font = '500 14px Inter, sans-serif';
-            ctx.fillText(`Sequence extraction completed on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, margin, margin + 75);
-
-            // Key Stats Row
-            const drawStat = (label, value, x) => {
-                ctx.fillStyle = '#94a3b8';
-                ctx.font = '600 11px Inter, sans-serif';
-                ctx.fillText(label.toUpperCase(), x, margin + 115);
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 24px "JetBrains Mono", monospace';
-                ctx.fillText(value, x, margin + 145);
-            };
-            drawStat('Total Sequences', totalSeqs.toLocaleString(), margin);
-            drawStat('Max Depth Found', `${maxD} Levels`, margin + 180);
-            drawStat('Report Status', 'VERIFIED', margin + 360);
-
-            // Main Chart Drawing
-            ctx.shadowColor = 'rgba(0, 242, 255, 0.2)';
-            ctx.shadowBlur = 30;
-            ctx.drawImage(chartCanvas, margin, margin + headerHeight + 40);
-            ctx.shadowBlur = 0; // Reset shadow
-
-            // Premium Sidebar (Glassmorphism)
-            const sidebarX = chartCanvas.width + margin + 60;
-            const sidebarY = margin + headerHeight + 40;
-            const sidebarH = tempCanvas.height - sidebarY - margin;
-            
-            // Sidebar Glow/Background
-            const sideGrad = ctx.createLinearGradient(sidebarX, sidebarY, sidebarX + sidebarWidth, sidebarY + sidebarH);
-            sideGrad.addColorStop(0, 'rgba(255, 255, 255, 0.05)');
-            sideGrad.addColorStop(1, 'rgba(255, 255, 255, 0.01)');
-            ctx.fillStyle = sideGrad;
-            
-            if (ctx.roundRect) {
-                ctx.beginPath();
-                ctx.roundRect(sidebarX, sidebarY, sidebarWidth, sidebarH, 24);
-                ctx.fill();
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-            }
-
-            // Sidebar Header
-            ctx.fillStyle = '#00f2ff';
-            ctx.font = 'bold 13px Inter, sans-serif';
-            ctx.fillText('DISTRIBUTION BREAKDOWN', sidebarX + 30, sidebarY + 45);
-
-            // Calculate backtest duration in days for avg frequency
-            const parseTime = (t) => new Date(t.replace(/\./g, '/'));
-            const start = parseTime(sequences[0].startTime);
-            const end = parseTime(sequences[sequences.length - 1].endTime);
-            const totalDays = Math.max(1, (end - start) / (1000 * 60 * 60 * 24));
-
-            let yPos = sidebarY + 95;
-            labels.forEach((l, idx) => {
-                const count = counts[l];
-                const avgDays = totalDays / count;
-                let freqText = "";
-                if (avgDays < 1) {
-                    const hrs = avgDays * 24;
-                    freqText = hrs < 1 ? `${(hrs * 60).toFixed(0)}m` : `${hrs.toFixed(1)}h`;
-                } else if (avgDays > 30) {
-                    freqText = `${(avgDays / 30).toFixed(1)}mo`;
-                } else {
-                    freqText = `${avgDays.toFixed(1)}d`;
-                }
-
-                const isEven = idx % 2 === 0;
-                if (isEven) {
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
-                    ctx.fillRect(sidebarX + 10, yPos - 25, sidebarWidth - 20, rowHeight);
-                }
-
-                // Label
-                ctx.fillStyle = '#94a3b8';
-                ctx.font = 'bold 12px Inter, sans-serif';
-                ctx.fillText(`DEPTH ${l}`, sidebarX + 30, yPos - 5);
-                
-                // Frequency Tag
-                ctx.fillStyle = 'rgba(0, 242, 255, 0.1)';
-                const tagW = ctx.measureText(`1 per ${freqText}`).width + 10;
-                ctx.fillRect(sidebarX + 30, yPos + 2, tagW, 14);
-                ctx.fillStyle = '#00f2ff';
-                ctx.font = '500 10px Inter, sans-serif';
-                ctx.fillText(`1 per ${freqText}`, sidebarX + 35, yPos + 12);
-
-                // Count
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 16px "JetBrains Mono", monospace';
-                const valStr = `${count.toLocaleString()} times`;
-                const valW = ctx.measureText(valStr).width;
-                ctx.fillText(valStr, sidebarX + sidebarWidth - valW - 30, yPos + 5);
-                
-                yPos += rowHeight;
-            });
-
-            // Footer / Watermark
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.font = 'italic 12px Inter, sans-serif';
-            ctx.fillText('FUJI MARTINGALE STREAK • PERFORMANCE ANALYSIS', margin, tempCanvas.height - 30);
-            
-            const pngLink = document.createElement('a');
-            pngLink.href = tempCanvas.toDataURL('image/png');
-            pngLink.download = `Martingale_Report_${Date.now()}.png`;
-            pngLink.click();
-        }
 
         function renderFrequencyChart(sequences) {
             const counts = {};
@@ -805,7 +637,6 @@
                 tbody.appendChild(tr);
             });
 
-            document.getElementById('export-btn').onclick = () => exportReport(filteredSeqs);
         }
 
 

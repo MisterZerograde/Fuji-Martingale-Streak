@@ -6,6 +6,10 @@ echo   BUILDING FUJI MARTINGALE STREAK EXE
 echo ===========================================
 echo.
 
+echo 0. Closing any running application instances...
+taskkill /F /IM FujiStreak.exe /T 2>nul
+timeout /t 2 /nobreak >nul
+
 echo 1. Updating application logic from UI source...
 python prebuild.py
 if !errorlevel! neq 0 (
